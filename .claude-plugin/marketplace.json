@@ -1,0 +1,16 @@
+{
+  "name": "atknatk",
+  "owner": {
+    "name": "atknatk"
+  },
+  "metadata": {
+    "description": "Claude Code plugins by atknatk. Code review, development tools, and automation.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "code-review",
+      "source": "./plugins/code-review"
+    }
+  ]
+}

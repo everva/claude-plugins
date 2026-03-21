@@ -1,0 +1,17 @@
+{
+  "name": "code-review",
+  "description": "Multi-session code review with auto-fix loop. Reviewer runs in isolated claude -p sessions for unbiased review, fixer stays in the current session to preserve project context.",
+  "version": "1.0.0",
+  "author": {
+    "name": "atknatk"
+  },
+  "repository": "https://github.com/atknatk/claude-code-review",
+  "keywords": [
+    "code-review",
+    "quality",
+    "security",
+    "pre-commit",
+    "review-loop",
+    "auto-fix"
+  ]
+}
