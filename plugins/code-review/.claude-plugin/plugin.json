@@ -3,9 +3,9 @@
   "description": "Multi-session code review with auto-fix loop. Reviewer runs in isolated claude -p sessions for unbiased review, fixer stays in the current session to preserve project context.",
   "version": "1.0.0",
   "author": {
-    "name": "atknatk"
+    "name": "everva"
   },
-  "repository": "https://github.com/atknatk/claude-code-review",
+  "repository": "https://github.com/everva/claude-plugins",
   "keywords": [
     "code-review",
     "quality",

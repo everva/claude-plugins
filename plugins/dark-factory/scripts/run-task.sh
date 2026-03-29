@@ -305,9 +305,14 @@ SAT_INT=$(safe_int "$SATISFACTION_SCORE")
 HOLDOUT_INT=$(safe_int "$HOLDOUT_SCORE")
 FILES_INT=$(safe_int "$FILES_CHANGED")
 
+# Sanitize boolean values for jq --argjson
+[[ "$IMPL_SUCCESS" =~ ^(true|false)$ ]] || IMPL_SUCCESS="false"
+[[ "$HOLDOUT_PASS" =~ ^(true|false)$ ]] || HOLDOUT_PASS="true"
+ISSUE_NUMBER=$(safe_int "${ISSUE_NUMBER:-0}")
+
 # Compute risk score (reads risk_factors from project config)
 RISK_RESULT=$(compute_risk_score "$ISSUE_LABELS" "$LAYER" "$FILES_INT" "$PIPELINE")
-RISK_SCORE=$(echo "$RISK_RESULT" | cut -d'|' -f1)
+RISK_SCORE=$(safe_int "$(echo "$RISK_RESULT" | cut -d'|' -f1)")
 RISK_FACTORS=$(echo "$RISK_RESULT" | cut -d'|' -f2-)
 echo "[$SESSION_ID] Risk score: $RISK_SCORE (factors: $RISK_FACTORS)" >> "$SESSION_DIR/run.log"
 

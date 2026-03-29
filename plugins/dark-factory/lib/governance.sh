@@ -31,14 +31,16 @@ parse_impl_result() {
     return 0
   fi
 
-  # Try 3: Find any JSON with "success" field (progressive trim)
+  # Try 3: Find any JSON with "success" field (progressive trim, max 500 iterations)
   json=$(grep -o '{"success":.*' "$file" 2>/dev/null | head -1)
-  while [ -n "$json" ]; do
+  local trim_count=0
+  while [ -n "$json" ] && [ "$trim_count" -lt 500 ]; do
     if echo "$json" | jq . >/dev/null 2>&1; then
       echo "$json"
       return 0
     fi
     json="${json%?}"
+    trim_count=$((trim_count + 1))
   done
 
   echo "{}"

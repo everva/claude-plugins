@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/holdout-guard.sh",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }

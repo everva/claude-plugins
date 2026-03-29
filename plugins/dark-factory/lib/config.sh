@@ -73,7 +73,7 @@ load_project_config() {
     export DF_BACKLOG_FORMAT="$(yaml_val "$config_file" "backlog_format" "issue+spec")"
     export DF_GOVERNANCE_CEILING="$(yaml_val "$config_file" "governance_ceiling" "T1")"
   else
-    # Defaults when no config exists
+    # Defaults when no config exists (simpler mode: spec-only backlog, no GitHub integration)
     export DF_PROJECT_NAME="$(basename "$project_dir")"
     export DF_GITHUB_REPO=""
     export DF_SHIP_MODEL="pr-creation"

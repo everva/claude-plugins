@@ -18,8 +18,8 @@ Current Claude Session (fixer, persistent context)
 ## Install
 
 ```
-/plugin marketplace add atknatk/claude-plugins
-/plugin install code-review@atknatk
+/plugin marketplace add everva/claude-plugins
+/plugin install code-review@everva
 /reload-plugins
 ```
 
@@ -53,14 +53,14 @@ Reviews staged changes with `claude -p` on every commit. Only flags CRITICAL iss
 
 ```bash
 # Install hook in any project
-~/.claude/plugins/cache/atknatk/code-review/*/scripts/install-git-hook.sh
+~/.claude/plugins/cache/everva/code-review/*/scripts/install-git-hook.sh
 ```
 
 ## Terminal Usage
 
 ```bash
 # Clone and use scripts directly
-git clone https://github.com/atknatk/claude-plugins.git
+git clone https://github.com/everva/claude-plugins.git
 cd claude-plugins/plugins/code-review/scripts
 
 # Single review
@@ -107,5 +107,5 @@ scripts/install-git-hook.sh         # Hook installer
 ## Uninstall
 
 ```
-/plugin uninstall code-review@atknatk
+/plugin uninstall code-review@everva
 ```

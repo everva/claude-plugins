@@ -120,31 +120,10 @@ ship_auto() {
         ship_log "T0: PR not yet merged (state=$t0_state) — CI will handle"
       fi
     else
-      ship_log "T1: Enabling auto-merge, waiting for CI..."
+      ship_log "T1: Enabling auto-merge — GitHub will merge after CI passes"
       gh_optional pr merge "$pr_url" --squash --auto
-
-      if command -v gh &>/dev/null; then
-        local merge_timeout=600 merge_start
-        merge_start=$(date +%s)
-        while [ $(( $(date +%s) - merge_start )) -lt "$merge_timeout" ]; do
-          local pr_state
-          pr_state=$(gh pr view "$pr_url" --json state -q '.state' 2>/dev/null || echo "UNKNOWN")
-          if [ "$pr_state" = "MERGED" ]; then
-            merged=true
-            break
-          elif [ "$pr_state" = "CLOSED" ]; then
-            ship_log "WARNING: PR was closed (not merged)"
-            break
-          fi
-          sleep 30
-        done
-      fi
-
-      if [ "$merged" = "true" ]; then
-        ship_log "T1: PR merged after CI passed"
-      else
-        ship_log "T1: PR not yet merged — CI will handle"
-      fi
+      # No polling — gh pr merge --auto enables GitHub's auto-merge feature.
+      # GitHub will merge the PR automatically once CI passes.
     fi
   fi
 

@@ -6,13 +6,12 @@
 
 INPUT=$(cat)
 
-# Extract the relevant field based on tool type
+# Extract ALL relevant fields (command, file_path, pattern, path) and join them
+# This prevents bypass via Glob tool where pattern and path are separate fields
 CMD=$(echo "$INPUT" | jq -r '
-  .tool_input.command //
-  .tool_input.file_path //
-  .tool_input.pattern //
-  .tool_input.path //
-  ""' 2>/dev/null)
+  [.tool_input.command, .tool_input.file_path, .tool_input.pattern, .tool_input.path]
+  | map(select(. != null and . != ""))
+  | join(" ")' 2>/dev/null)
 
 # Allow directory creation and management (mkdir, ls, touch, chmod)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null)
