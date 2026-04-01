@@ -116,6 +116,19 @@ if [ -f "$SESSION_DIR/spec.md" ]; then
 $(cat "$SESSION_DIR/spec.md")"
 fi
 
+# Load guardrails (failure patterns from previous iterations)
+GUARDRAILS_SECTION=""
+GUARDRAILS_FILE="${DF_GUARDRAILS_FILE:-$DF_FACTORY_DIR/failure-patterns.md}"
+if [ -f "$GUARDRAILS_FILE" ]; then
+  GUARDRAILS_CONTENT=$(tail -100 "$GUARDRAILS_FILE" 2>/dev/null || echo "")
+  if [ -n "$GUARDRAILS_CONTENT" ] && echo "$GUARDRAILS_CONTENT" | grep -q "^###"; then
+    GUARDRAILS_SECTION="## Guardrails — Learn from Past Failures
+The following failure patterns were recorded from previous pipeline runs. Read them carefully and avoid repeating these mistakes.
+
+$GUARDRAILS_CONTENT"
+  fi
+fi
+
 ISSUE_REF=""
 if [ -n "$ISSUE_NUMBER" ]; then
   ISSUE_REF="This implements GitHub Issue #$ISSUE_NUMBER."
@@ -141,6 +154,8 @@ Session: $SESSION_ID
 ${ISSUE_REF}
 
 $SPEC_SECTION
+
+${GUARDRAILS_SECTION}
 
 ## Important
 - ALWAYS create a PR. Do NOT merge the PR yourself — governance will handle merge decisions.
@@ -194,7 +209,7 @@ if [ -f "$SESSION_DIR/spec-full.md" ] && grep -q "^## Holdout Scenarios" "$SESSI
 fi
 
 if [ "$HAS_YAML_HOLDOUTS" = "true" ] || [ "$HAS_INLINE_HOLDOUTS" = "true" ]; then
-  HOLDOUT_PROMPT="You are the holdout-validator agent for the $DF_PROJECT_NAME Dark Factory.
+  HOLDOUT_BASE_PROMPT="You are the holdout-validator agent for the $DF_PROJECT_NAME Dark Factory.
 Session: $SESSION_ID
 
 Read the agent instructions from the holdout-validator agent definition.
@@ -202,7 +217,7 @@ Read the agent instructions from the holdout-validator agent definition.
 Run holdout validation for layer: $LAYER"
 
   if [ "$HAS_YAML_HOLDOUTS" = "true" ]; then
-    HOLDOUT_PROMPT="$HOLDOUT_PROMPT
+    HOLDOUT_BASE_PROMPT="$HOLDOUT_BASE_PROMPT
 
 ## Layer-wide holdout scenarios
 Directory: $HOLDOUT_DIR
@@ -210,22 +225,69 @@ Read each .holdout.yaml file and validate the current implementation."
   fi
 
   if [ "$HAS_INLINE_HOLDOUTS" = "true" ]; then
-    HOLDOUT_PROMPT="$HOLDOUT_PROMPT
+    HOLDOUT_BASE_PROMPT="$HOLDOUT_BASE_PROMPT
 
 ## Inline holdout scenarios (from intent spec)
 File: $SESSION_DIR/inline-holdouts.md
 Read this file and validate each scenario against the implementation."
   fi
 
-  HOLDOUT_PROMPT="$HOLDOUT_PROMPT
+  HOLDOUT_BASE_PROMPT="$HOLDOUT_BASE_PROMPT
 
 Output results as JSON with fields: overall_pass (boolean), overall_score (number 0-100), scenarios (array)."
 
-  HOLDOUT_VALIDATOR_MODE=true timeout 300 claude -p "$HOLDOUT_PROMPT" \
-    --max-budget-usd "$HOLDOUT_BUDGET" \
-    --allowedTools "Read,Grep,Glob,Bash" \
-    2>"$SESSION_DIR/holdout-stderr.log" \
-    >"$SESSION_DIR/holdout-result.json" || true
+  # Multi-run holdout validation: run N times, require quorum passes
+  HOLDOUT_RUNS="${DF_HOLDOUT_RUNS:-3}"
+  HOLDOUT_QUORUM="${DF_HOLDOUT_QUORUM:-2}"
+  HOLDOUT_THRESHOLD="${DF_HOLDOUT_THRESHOLD:-90}"
+  HOLDOUT_PER_RUN_BUDGET=$(echo "$HOLDOUT_BUDGET $HOLDOUT_RUNS" | awk '{v=$1/$2; if(v<0.10) v=0.10; printf "%.2f", v}')
+
+  echo "[$SESSION_ID] Holdout: running $HOLDOUT_RUNS times, quorum=$HOLDOUT_QUORUM, threshold=$HOLDOUT_THRESHOLD" >> "$SESSION_DIR/run.log"
+
+  HOLDOUT_PASS_COUNT=0
+  HOLDOUT_SCORE_SUM=0
+  for run_i in $(seq 1 "$HOLDOUT_RUNS"); do
+    echo "[$SESSION_ID] Holdout run $run_i/$HOLDOUT_RUNS..." >> "$SESSION_DIR/run.log"
+    HOLDOUT_VALIDATOR_MODE=true timeout 300 claude -p "$HOLDOUT_BASE_PROMPT
+
+This is validation run $run_i of $HOLDOUT_RUNS. Evaluate independently — do not assume prior results." \
+      --max-budget-usd "$HOLDOUT_PER_RUN_BUDGET" \
+      --allowedTools "Read,Grep,Glob,Bash" \
+      2>"$SESSION_DIR/holdout-run${run_i}-stderr.log" \
+      >"$SESSION_DIR/holdout-run${run_i}.json" || true
+
+    RUN_PASS=$(parse_json_field "$SESSION_DIR/holdout-run${run_i}.json" "overall_pass" "false")
+    RUN_SCORE=$(parse_json_field "$SESSION_DIR/holdout-run${run_i}.json" "overall_score" "0")
+    RUN_SCORE_INT=$(safe_int "$RUN_SCORE")
+
+    if [ "$RUN_PASS" = "true" ] && [ "$RUN_SCORE_INT" -ge "$HOLDOUT_THRESHOLD" ]; then
+      HOLDOUT_PASS_COUNT=$((HOLDOUT_PASS_COUNT + 1))
+    fi
+    HOLDOUT_SCORE_SUM=$((HOLDOUT_SCORE_SUM + RUN_SCORE_INT))
+
+    echo "[$SESSION_ID] Holdout run $run_i: pass=$RUN_PASS score=$RUN_SCORE_INT" >> "$SESSION_DIR/run.log"
+  done
+
+  # Quorum decision: require HOLDOUT_QUORUM out of HOLDOUT_RUNS passes
+  HOLDOUT_AVG_SCORE=$((HOLDOUT_SCORE_SUM / HOLDOUT_RUNS))
+  if [ "$HOLDOUT_PASS_COUNT" -ge "$HOLDOUT_QUORUM" ]; then
+    HOLDOUT_QUORUM_PASS="true"
+  else
+    HOLDOUT_QUORUM_PASS="false"
+  fi
+
+  echo "[$SESSION_ID] Holdout quorum: $HOLDOUT_PASS_COUNT/$HOLDOUT_RUNS passed (need $HOLDOUT_QUORUM), avg_score=$HOLDOUT_AVG_SCORE" >> "$SESSION_DIR/run.log"
+
+  # Write consolidated holdout result
+  jq -n \
+    --argjson overall_pass "$HOLDOUT_QUORUM_PASS" \
+    --argjson overall_score "$HOLDOUT_AVG_SCORE" \
+    --argjson runs "$HOLDOUT_RUNS" \
+    --argjson passes "$HOLDOUT_PASS_COUNT" \
+    --argjson quorum "$HOLDOUT_QUORUM" \
+    --argjson threshold "$HOLDOUT_THRESHOLD" \
+    '{overall_pass:$overall_pass, overall_score:$overall_score, runs:$runs, passes:$passes, quorum:$quorum, threshold:$threshold}' \
+    > "$SESSION_DIR/holdout-result.json"
 else
   echo '{"overall_pass": true, "overall_score": 100, "note": "No holdout scenarios found"}' > "$SESSION_DIR/holdout-result.json"
 fi
@@ -352,6 +414,12 @@ GOVERNANCE_BODY=$(build_governance_body "$SESSION_ID" "${ISSUE_NUMBER:-0}" "$LAY
 case "$DECISION" in
   "blocked")
     ship_blocked "$PR_URL" "${ISSUE_NUMBER:-}" "$DF_GITHUB_REPO" "$HOLDOUT_PASS" "$SAT_INT" "$IMPL_SUCCESS"
+    # Record failure pattern for guardrails
+    BLOCK_REASON="blocked"
+    [ "$IMPL_SUCCESS" = "false" ] && BLOCK_REASON="implementation failed"
+    [ "$HOLDOUT_PASS" = "false" ] && BLOCK_REASON="holdout validation failed"
+    [ "${SAT_INT:-0}" -lt 50 ] && BLOCK_REASON="satisfaction too low ($SAT_INT)"
+    "$SCRIPT_DIR/record-failure.sh" "${SPEC_FILE:-Issue #$ISSUE_NUMBER}" "$SESSION_ID" "$BLOCK_REASON" 2>>"$SESSION_DIR/run.log" || true
     ;;
   "no-op")
     ship_noop "${ISSUE_NUMBER:-}" "$DF_GITHUB_REPO"

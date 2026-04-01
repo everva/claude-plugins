@@ -71,6 +71,17 @@ ship_model: "pr-creation"      # direct-commit | pr-creation | pr-label
 backlog_format: "issue+spec"   # spec-only | issue+spec
 governance_ceiling: "T1"       # Ralph loop only processes T0 and T1
 
+# Holdout validation — multi-run quorum voting
+holdout_runs: 3                # Number of independent validation runs
+holdout_quorum: 2              # Minimum passes required (out of holdout_runs)
+holdout_threshold: 90          # Minimum score to count as a pass
+
+# Retry limits
+max_attempts_per_spec: 3       # Max attempts before marking spec as exhausted
+
+# Guardrails — failure patterns fed back to implementation agent
+guardrails_file: ".dark-factory/failure-patterns.md"
+
 # Risk factors — add patterns specific to your project
 risk_factors:
   - pattern: "auth|login|session|jwt|token"
@@ -190,11 +201,16 @@ The Ralph Wiggum loop:
 
 1. Syncs GitHub Issues with `status:ready` label to backlog (if `gh` configured)
 2. Picks the next pending task (respects governance ceiling)
-3. Runs `run-task.sh` with fresh `claude -p` context (prevents drift)
-4. Validates with holdout scenarios + satisfaction judge
-5. Applies governance tier decision (auto-ship, PR, review, or block)
-6. Updates backlog and GitHub Issue labels
-7. Repeats until: max iterations, max duration, 3 consecutive failures, or `.stop-signal`
+3. **Checks retry count** — skips specs that have reached `max_attempts_per_spec` (default: 3)
+4. **Loads guardrails** — feeds `failure-patterns.md` to the implementation agent so it learns from past failures
+5. Runs `run-task.sh` with fresh `claude -p` context (prevents drift)
+6. **Multi-run holdout validation** — runs holdout N times with quorum voting (default: 3 runs, 2/3 must pass with score >= 90)
+7. Satisfaction judge (two-pass adversarial evaluation)
+8. Applies governance tier decision (auto-ship, PR, review, or block)
+9. **On failure**: records failure pattern to `failure-patterns.md`, puts task back in pending for retry
+10. **On exhaustion** (max attempts reached): marks task as `exhausted`, sends alert
+11. Updates backlog and GitHub Issue labels
+12. Repeats until: max iterations, max duration, 3 consecutive failures, or `.stop-signal`
 
 ### Stopping the Loop
 
@@ -241,6 +257,38 @@ Built-in factors (always active):
 - **Full pipeline**: +10
 
 Custom factors from `config.yaml` are added when the pattern matches issue labels or layer name.
+
+## Quality Gates
+
+### Multi-Run Holdout Validation
+
+Holdout validation runs multiple times with quorum voting to prevent non-deterministic false passes. Each run is an independent `claude -p` invocation that evaluates the implementation from scratch.
+
+| Config | Default | Description |
+| --- | --- | --- |
+| `holdout_runs` | 3 | Number of independent validation runs |
+| `holdout_quorum` | 2 | Minimum passes required |
+| `holdout_threshold` | 90 | Minimum `overall_score` to count as a pass |
+
+A holdout result counts as "pass" only when `overall_pass=true` AND `overall_score >= holdout_threshold`. The final decision requires at least `holdout_quorum` passes out of `holdout_runs` total runs. Individual run results are saved as `holdout-run1.json`, `holdout-run2.json`, etc.
+
+### Per-Spec Retry Tracking
+
+Failed tasks are put back in the backlog as `pending` for retry, up to `max_attempts_per_spec` (default: 3). Attempt counts are tracked in `.dark-factory/.ralph-attempts.json` and persist across Ralph loop restarts.
+
+When a spec exhausts all retries, it is marked as `exhausted` in the backlog and an alert is sent. This prevents the loop from wasting resources on persistently failing specs.
+
+### Automatic Guardrails (Learning from Failures)
+
+Every blocked task automatically records a failure pattern to `failure-patterns.md`. Subsequent implementation agents receive these patterns as context, preventing them from repeating the same mistakes.
+
+The guardrails feedback loop:
+
+1. Task fails → `record-failure.sh` appends root cause + context to `failure-patterns.md`
+2. Next iteration → implementation agent reads `failure-patterns.md` as "Guardrails" section
+3. Agent avoids repeating documented failure patterns
+
+This implements the guardrails concept from Geoffrey Huntley's Ralph Wiggum technique.
 
 ## Agents
 

@@ -72,6 +72,11 @@ load_project_config() {
     export DF_BACKLOG_FILE="$project_dir/$(yaml_val "$config_file" "backlog_file" ".dark-factory/backlog.md")"
     export DF_BACKLOG_FORMAT="$(yaml_val "$config_file" "backlog_format" "issue+spec")"
     export DF_GOVERNANCE_CEILING="$(yaml_val "$config_file" "governance_ceiling" "T1")"
+    export DF_HOLDOUT_RUNS="$(yaml_val "$config_file" "holdout_runs" "3")"
+    export DF_HOLDOUT_QUORUM="$(yaml_val "$config_file" "holdout_quorum" "2")"
+    export DF_HOLDOUT_THRESHOLD="$(yaml_val "$config_file" "holdout_threshold" "90")"
+    export DF_MAX_ATTEMPTS_PER_SPEC="$(yaml_val "$config_file" "max_attempts_per_spec" "3")"
+    export DF_GUARDRAILS_FILE="$project_dir/$(yaml_val "$config_file" "guardrails_file" ".dark-factory/failure-patterns.md")"
   else
     # Defaults when no config exists (simpler mode: spec-only backlog, no GitHub integration)
     export DF_PROJECT_NAME="$(basename "$project_dir")"
@@ -81,5 +86,10 @@ load_project_config() {
     export DF_BACKLOG_FILE="$project_dir/.dark-factory/backlog.md"
     export DF_BACKLOG_FORMAT="spec-only"
     export DF_GOVERNANCE_CEILING="T1"
+    export DF_HOLDOUT_RUNS="3"
+    export DF_HOLDOUT_QUORUM="2"
+    export DF_HOLDOUT_THRESHOLD="90"
+    export DF_MAX_ATTEMPTS_PER_SPEC="3"
+    export DF_GUARDRAILS_FILE="$project_dir/.dark-factory/failure-patterns.md"
   fi
 }

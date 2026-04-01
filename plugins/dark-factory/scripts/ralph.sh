@@ -29,6 +29,8 @@ MAX_DURATION_HOURS="${2:-6}"
 MAX_DURATION_SECONDS=$((MAX_DURATION_HOURS * 3600))
 MAX_CONSECUTIVE_FAILURES=3
 GOVERNANCE_CEILING="$DF_GOVERNANCE_CEILING"
+MAX_ATTEMPTS_PER_SPEC="${DF_MAX_ATTEMPTS_PER_SPEC:-3}"
+ATTEMPTS_FILE="$FACTORY_DIR/.ralph-attempts.json"
 
 # --- State ---
 START_TIME=$(date +%s)
@@ -36,6 +38,26 @@ ITERATION=0
 CONSECUTIVE_FAILURES=0
 TASKS_COMPLETED=0
 TASKS_FAILED=0
+
+# --- Retry Tracking ---
+# Initialize attempts file if missing
+if [ ! -f "$ATTEMPTS_FILE" ]; then
+  echo '{}' > "$ATTEMPTS_FILE"
+fi
+
+# Get attempt count for a spec
+get_attempts() {
+  local spec="$1"
+  jq -r --arg s "$spec" '.[$s] // 0' "$ATTEMPTS_FILE" 2>/dev/null || echo "0"
+}
+
+# Increment attempt count for a spec
+inc_attempts() {
+  local spec="$1"
+  local tmp="${ATTEMPTS_FILE}.tmp"
+  jq --arg s "$spec" '.[$s] = ((.[$s] // 0) + 1)' "$ATTEMPTS_FILE" > "$tmp" 2>/dev/null \
+    && [ -s "$tmp" ] && mv "$tmp" "$ATTEMPTS_FILE" || rm -f "$tmp"
+}
 
 # --- Functions ---
 log() {
@@ -95,6 +117,7 @@ log "========================================="
 log "Max iterations: $MAX_ITERATIONS"
 log "Max duration: ${MAX_DURATION_HOURS}h"
 log "Governance ceiling: $GOVERNANCE_CEILING"
+log "Max attempts per spec: $MAX_ATTEMPTS_PER_SPEC"
 log "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 log ""
 
@@ -184,6 +207,16 @@ while true; do
     log "Selected: $RAW_TASK"
   fi
 
+  # --- Guard: Max attempts per spec ---
+  TASK_ATTEMPTS=$(get_attempts "$TASK_LABEL")
+  if [ "$TASK_ATTEMPTS" -ge "$MAX_ATTEMPTS_PER_SPEC" ]; then
+    log "SKIP: $TASK_LABEL has reached max attempts ($TASK_ATTEMPTS/$MAX_ATTEMPTS_PER_SPEC) — marking exhausted"
+    update_backlog_status "$TASK_LABEL" "exhausted" "n/a"
+    "$SCRIPT_DIR/alert.sh" warning "Spec Exhausted" "$TASK_LABEL failed $MAX_ATTEMPTS_PER_SPEC times" 2>/dev/null || true
+    continue
+  fi
+  log "Attempt $((TASK_ATTEMPTS + 1))/$MAX_ATTEMPTS_PER_SPEC for $TASK_LABEL"
+
   # --- Step 2: Execute task (fresh context) ---
   log "Executing task..."
   # shellcheck disable=SC2086
@@ -212,9 +245,20 @@ while true; do
       ;;
     "blocked")
       log "FAILED: $TASK_LABEL → blocked (session: $SESSION_ID)"
-      update_backlog_status "$TASK_LABEL" "rejected" "$SESSION_ID"
+      inc_attempts "$TASK_LABEL"
       TASKS_FAILED=$((TASKS_FAILED + 1))
       CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+      # Check if spec is now exhausted
+      TASK_ATTEMPTS_NOW=$(get_attempts "$TASK_LABEL")
+      if [ "$TASK_ATTEMPTS_NOW" -ge "$MAX_ATTEMPTS_PER_SPEC" ]; then
+        log "EXHAUSTED: $TASK_LABEL reached max attempts ($MAX_ATTEMPTS_PER_SPEC) — no more retries"
+        update_backlog_status "$TASK_LABEL" "exhausted" "$SESSION_ID"
+        # Record failure for guardrails
+        "$SCRIPT_DIR/record-failure.sh" "$TASK_LABEL" "$SESSION_ID" "exhausted after $MAX_ATTEMPTS_PER_SPEC attempts" 2>>"$RALPH_LOG" || true
+      else
+        update_backlog_status "$TASK_LABEL" "pending" "$SESSION_ID"
+        log "RETRY: $TASK_LABEL back to pending (attempt $TASK_ATTEMPTS_NOW/$MAX_ATTEMPTS_PER_SPEC)"
+      fi
       ;;
     *)
       log "UNKNOWN: $TASK_LABEL → $DECISION"

@@ -21,6 +21,19 @@ backlog_format: "issue+spec"
 # Governance ceiling for Ralph loop (only process tasks up to this tier)
 governance_ceiling: "T1"
 
+# Holdout validation — multi-run quorum voting
+# Each holdout validation runs N times; requires quorum passes above threshold
+holdout_runs: 3           # Number of independent validation runs per task
+holdout_quorum: 2         # Minimum passes required (out of holdout_runs)
+holdout_threshold: 90     # Minimum overall_score to count as a pass
+
+# Retry limits — max attempts before marking a spec as exhausted
+max_attempts_per_spec: 3
+
+# Guardrails file — failure patterns from previous iterations
+# Implementation agents read this file to avoid repeating past mistakes
+guardrails_file: ".dark-factory/failure-patterns.md"
+
 # Risk factors — customize these for your project
 # Each factor adds its score to the risk total when the pattern matches
 # the issue labels or layer name.
