@@ -210,15 +210,15 @@ while true; do
   RAW_TASK_FULL=$(get_next_task)
 
   if [ "$DF_BACKLOG_FORMAT" = "issue+spec" ]; then
-    RAW_TASK=$(echo "$RAW_TASK_FULL" | grep -E '^[0-9]+\|' | head -1 | tr -d '`' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    RAW_TASK=$(echo "$RAW_TASK_FULL" | grep -E '^[0-9]+\|' | head -1 | tr -d '`' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
     if [ -z "$RAW_TASK" ]; then
-      RAW_TASK=$(echo "$RAW_TASK_FULL" | grep -oE '[0-9]+\|[^ ]+\.intent\.md' | head -1)
+      RAW_TASK=$(echo "$RAW_TASK_FULL" | grep -oE '[0-9]+\|[^ ]+\.intent\.md' | head -1 || true)
     fi
     if [ -z "$RAW_TASK" ] && echo "$RAW_TASK_FULL" | grep -q "EMPTY"; then
       RAW_TASK="EMPTY"
     fi
   else
-    RAW_TASK=$(echo "$RAW_TASK_FULL" | grep -v "^$" | tail -1 | tr -d '`' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    RAW_TASK=$(echo "$RAW_TASK_FULL" | grep -v "^$" | tail -1 | tr -d '`' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
     if echo "$RAW_TASK" | grep -qi "EMPTY"; then
       RAW_TASK="EMPTY"
     fi
@@ -273,7 +273,7 @@ while true; do
   # --- Step 2: Execute task (fresh context) ---
   log "Executing task..."
   TASK_OUTPUT=$("$SCRIPT_DIR/run-task.sh" "${RUN_ARGS[@]}" 2>>"$RALPH_LOG" || echo "blocked")
-  SESSION_ID=$(echo "$TASK_OUTPUT" | grep "^SESSION:" | tail -1 | cut -d: -f2-)
+  SESSION_ID=$(echo "$TASK_OUTPUT" | grep "^SESSION:" | tail -1 | cut -d: -f2- || true)
   DECISION=$(echo "$TASK_OUTPUT" | tail -1 | tr -d '[:space:]')
   # Fallback: if run-task.sh didn't output SESSION:, use ls -t
   if [ -z "$SESSION_ID" ]; then

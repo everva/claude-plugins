@@ -275,7 +275,7 @@ extract_layer() {
   local spec_file="${2:-}"
 
   local layer=""
-  layer=$(echo "$labels" | tr ',' '\n' | grep '^layer:' | head -1 | cut -d: -f2)
+  layer=$(echo "$labels" | tr ',' '\n' | grep '^layer:' | head -1 | cut -d: -f2 || true)
 
   if [ -z "$layer" ] && [ -n "$spec_file" ]; then
     layer=$(basename "$spec_file" | sed 's/-.*//')

@@ -89,7 +89,7 @@ fi
 LAYER=$(extract_layer "$ISSUE_LABELS" "$SPEC_FILE")
 
 # Extract pipeline type
-PIPELINE=$(echo "$ISSUE_LABELS" | tr ',' '\n' | grep '^pipeline:' | head -1 | cut -d: -f2)
+PIPELINE=$(echo "$ISSUE_LABELS" | tr ',' '\n' | grep '^pipeline:' | head -1 | cut -d: -f2 || true)
 PIPELINE=${PIPELINE:-standard}
 
 echo "[$SESSION_ID] Spec: ${SPEC_FILE:-none}" >> "$SESSION_DIR/run.log"

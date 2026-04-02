@@ -52,10 +52,10 @@ while read -r issue; do
   BODY=$(echo "$issue" | jq -r '.body // ""')
   LABELS=$(echo "$issue" | jq -r '[.labels[].name] | join(",")' 2>/dev/null || echo "")
 
-  LAYER=$(echo "$LABELS" | tr ',' '\n' | grep '^layer:' | head -1 | cut -d: -f2)
+  LAYER=$(echo "$LABELS" | tr ',' '\n' | grep '^layer:' | head -1 | cut -d: -f2 || true)
   LAYER=${LAYER:-backend}
 
-  PIPELINE=$(echo "$LABELS" | tr ',' '\n' | grep '^pipeline:' | head -1 | cut -d: -f2)
+  PIPELINE=$(echo "$LABELS" | tr ',' '\n' | grep '^pipeline:' | head -1 | cut -d: -f2 || true)
   PIPELINE=${PIPELINE:-standard}
 
   SAFE_TITLE=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | head -c 50)
