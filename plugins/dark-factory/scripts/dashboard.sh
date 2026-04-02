@@ -34,6 +34,7 @@ NOOP_SESSIONS=0
 TOTAL_HOLDOUT_SCORE=0
 TOTAL_SATISFACTION_SCORE=0
 SCORED_SESSIONS=0
+HOLDOUT_SCORED_SESSIONS=0
 
 CUTOFF_DATE=$(date -v-${DAYS}d +%Y%m%d 2>/dev/null || date -d "${DAYS} days ago" +%Y%m%d 2>/dev/null || echo "00000000")
 
@@ -67,16 +68,20 @@ if [ -d "$SESSIONS_DIR" ]; then
     fi
     if [ "$holdout_score" != "0" ] && [ "$holdout_score" != "null" ]; then
       TOTAL_HOLDOUT_SCORE=$((TOTAL_HOLDOUT_SCORE + ${holdout_score%.*}))
+      HOLDOUT_SCORED_SESSIONS=$((HOLDOUT_SCORED_SESSIONS + 1))
     fi
   done
 fi
 
 if [ "$SCORED_SESSIONS" -gt 0 ]; then
-  AVG_HOLDOUT=$((TOTAL_HOLDOUT_SCORE / SCORED_SESSIONS))
   AVG_SATISFACTION=$((TOTAL_SATISFACTION_SCORE / SCORED_SESSIONS))
 else
-  AVG_HOLDOUT=0
   AVG_SATISFACTION=0
+fi
+if [ "$HOLDOUT_SCORED_SESSIONS" -gt 0 ]; then
+  AVG_HOLDOUT=$((TOTAL_HOLDOUT_SCORE / HOLDOUT_SCORED_SESSIONS))
+else
+  AVG_HOLDOUT=0
 fi
 
 RALPH_RUNS=0
@@ -146,13 +151,12 @@ else
   Total Runs:    $RALPH_RUNS
   Last Run:      $RALPH_LAST_RUN
 $(if [ -f "$DF_FACTORY_DIR/.rate-limiter.json" ]; then
-  source "$PLUGIN_ROOT/lib/rate_limiter.sh" 2>/dev/null
-  rl_init 2>/dev/null
-  echo "  Rate Usage:    $(rl_status 2>/dev/null || echo 'N/A')"
+  _rl_calls=$(jq -r '.calls_this_hour // 0' "$DF_FACTORY_DIR/.rate-limiter.json" 2>/dev/null || echo "0")
+  echo "  Rate Usage:    ${_rl_calls}/${DF_RATE_LIMIT_CALLS:-60} calls this hour"
 fi)
 $(if [ -f "$DF_FACTORY_DIR/.circuit-breaker.json" ]; then
-  source "$PLUGIN_ROOT/lib/circuit_breaker.sh" 2>/dev/null
-  echo "  Circuit State:  $(cb_state 2>/dev/null || echo 'N/A')"
+  _cb_state=$(jq -r '.state // "N/A"' "$DF_FACTORY_DIR/.circuit-breaker.json" 2>/dev/null || echo "N/A")
+  echo "  Circuit State:  ${_cb_state}"
 fi)
 
   Backlog

@@ -7,7 +7,7 @@ This plugin provides the **Dark Factory** autonomous AI development pipeline.
 - **Agents**: holdout-validator, satisfaction-judge, readiness-auditor, pipeline-doctor, regression-runner, task-analyzer
 - **Skills**: `/dark-factory:factory`, `/dark-factory:task`, `/dark-factory:readiness`, `/dark-factory:satisfaction`, `/dark-factory:dashboard`, `/dark-factory:validate`, `/dark-factory:init`
 - **Hooks**: holdout-guard (PreToolUse) — blocks implementation agents from reading holdout scenarios
-- **Scripts**: ralph.sh, run-task.sh, validate-session.sh, alert.sh, dashboard.sh, sync-backlog.sh, record-failure.sh
+- **Scripts**: ralph.sh, ralph-monitor.sh, run-task.sh, validate-session.sh, alert.sh, dashboard.sh, sync-backlog.sh, record-failure.sh, import-prd.sh
 - **Libs**: config.sh, governance.sh, ship.sh, circuit_breaker.sh, rate_limiter.sh
 
 ## Project Configuration

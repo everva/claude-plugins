@@ -10,21 +10,27 @@ Dark Factory — AI-driven autonomous development pipeline.
 ## Usage
 
 ```
-/dark-factory:factory start [count] [hours]   — Start Ralph Wiggum loop (default: 5 tasks, 6h)
-/dark-factory:factory status                   — Show factory dashboard
-/dark-factory:factory sync                     — Sync GitHub Issues → backlog
-/dark-factory:factory run <spec-or-issue>      — Run single task through full pipeline
-/dark-factory:factory backlog                  — Show current backlog
-/dark-factory:factory validate <session-id>    — Validate a completed session
-/dark-factory:factory stop                     — Gracefully stop the Ralph loop
+/dark-factory:factory start [count] [hours]            — Start Ralph Wiggum loop (default: 5 tasks, 6h)
+/dark-factory:factory start --monitor [count] [hours]  — Start with tmux live monitoring
+/dark-factory:factory status                            — Show factory dashboard
+/dark-factory:factory sync                              — Sync GitHub Issues → backlog
+/dark-factory:factory run <spec-or-issue>               — Run single task through full pipeline
+/dark-factory:factory backlog                           — Show current backlog
+/dark-factory:factory validate <session-id>             — Validate a completed session
+/dark-factory:factory import-prd <file> [--dry-run]     — Import PRD/requirements into backlog
+/dark-factory:factory stop                              — Gracefully stop the Ralph loop
 ```
 
 ## Commands
 
-### `start [count] [hours]`
-Launch the Ralph Wiggum autonomous loop.
+### `start [--monitor] [count] [hours]`
+Launch the Ralph Wiggum autonomous loop. With `--monitor`, opens a tmux session with live log tailing and dashboard.
 ```bash
+# Without monitoring:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/ralph.sh" ${count:-5} ${hours:-6}
+
+# With tmux monitoring (recommended for long runs):
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/ralph.sh" --monitor ${count:-5} ${hours:-6}
 ```
 
 ### `status`
@@ -59,6 +65,12 @@ cat .dark-factory/backlog.md
 Validate and inspect a completed session.
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/validate-session.sh" <session-id>
+```
+
+### `import-prd <file> [--format issue+spec|spec-only] [--dry-run]`
+Import a PRD/requirements document into the backlog. Creates intent spec files and appends backlog rows.
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/import-prd.sh" <file> [--format issue+spec] [--dry-run]
 ```
 
 ### `stop`

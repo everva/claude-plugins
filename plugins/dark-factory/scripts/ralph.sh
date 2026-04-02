@@ -11,6 +11,14 @@
 
 set -euo pipefail
 
+# --- Monitor mode ---
+# If --monitor is the first arg, delegate to ralph-monitor.sh with remaining args.
+if [ "${1:-}" = "--monitor" ]; then
+  shift
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  exec "$SCRIPT_DIR/ralph-monitor.sh" "$@"
+fi
+
 # --- Resolve paths ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -85,7 +93,7 @@ get_next_task() {
     prompt="Read the file $BACKLOG_FILE.
 Find the FIRST row in the 'Queue' table that meets ALL of these criteria:
 1. Status column is 'pending'
-2. Governance column is T0 or T1 (skip T2, T3, T4 — these need human review)
+2. Governance column is at or below ceiling $GOVERNANCE_CEILING (e.g. if ceiling is T1, accept T0 and T1; skip T2, T3, T4 — these need human review)
 
 Output ONLY in this exact format: ISSUE_NUMBER|SPEC_PATH
 For example: 42|docs/specs/backend-something.intent.md
@@ -237,10 +245,10 @@ while true; do
     TASK_LABEL="${TASK_SPEC:-$TASK_ISSUE}"
 
     if [ -n "$TASK_SPEC" ] && [ "$TASK_SPEC" != "$TASK_ISSUE" ]; then
-      RUN_ARGS="$TASK_SPEC"
+      RUN_ARGS=("$TASK_SPEC")
       log "Selected: #$TASK_ISSUE $TASK_SPEC"
     elif [ -n "$TASK_ISSUE" ]; then
-      RUN_ARGS="--issue $TASK_ISSUE"
+      RUN_ARGS=("--issue" "$TASK_ISSUE")
       log "Selected: Issue #$TASK_ISSUE (no spec file)"
     else
       log "STOP: Could not parse task from backlog"
@@ -248,7 +256,7 @@ while true; do
     fi
   else
     TASK_LABEL="$RAW_TASK"
-    RUN_ARGS="$RAW_TASK"
+    RUN_ARGS=("$RAW_TASK")
     log "Selected: $RAW_TASK"
   fi
 
@@ -264,11 +272,13 @@ while true; do
 
   # --- Step 2: Execute task (fresh context) ---
   log "Executing task..."
-  # shellcheck disable=SC2086
-  DECISION=$("$SCRIPT_DIR/run-task.sh" $RUN_ARGS 2>>"$RALPH_LOG" || echo "blocked")
-  DECISION=$(echo "$DECISION" | tail -1 | tr -d '[:space:]')
-
-  SESSION_ID=$(ls -t "$FACTORY_DIR/sessions/" 2>/dev/null | head -1)
+  TASK_OUTPUT=$("$SCRIPT_DIR/run-task.sh" "${RUN_ARGS[@]}" 2>>"$RALPH_LOG" || echo "blocked")
+  SESSION_ID=$(echo "$TASK_OUTPUT" | grep "^SESSION:" | tail -1 | cut -d: -f2-)
+  DECISION=$(echo "$TASK_OUTPUT" | tail -1 | tr -d '[:space:]')
+  # Fallback: if run-task.sh didn't output SESSION:, use ls -t
+  if [ -z "$SESSION_ID" ]; then
+    SESSION_ID=$(ls -t "$FACTORY_DIR/sessions/" 2>/dev/null | head -1)
+  fi
 
   # --- Track API usage ---
   rl_record_call

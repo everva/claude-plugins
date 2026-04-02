@@ -452,5 +452,6 @@ echo "[$SESSION_ID] PR: ${PR_URL:-none}" >> "$SESSION_DIR/run.log"
 echo "[$SESSION_ID] Duration: ${ELAPSED}s" >> "$SESSION_DIR/run.log"
 echo "[$SESSION_ID] Completed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$SESSION_DIR/run.log"
 
-# Output for Ralph loop consumption
+# Output for Ralph loop consumption (session ID + decision)
+echo "SESSION:$SESSION_ID"
 echo "$DECISION"

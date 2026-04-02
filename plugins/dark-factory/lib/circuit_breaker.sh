@@ -28,7 +28,7 @@ cb_get() {
 # Usage: cb_set '<jq filter>' [--arg name val ...]
 cb_set() {
   local filter="$1"; shift
-  local tmp="${CB_STATE_FILE}.tmp"
+  local tmp="${CB_STATE_FILE}.tmp.$$"
   jq "$@" "$filter" "$CB_STATE_FILE" > "$tmp" 2>/dev/null && [ -s "$tmp" ] && mv "$tmp" "$CB_STATE_FILE" || rm -f "$tmp"
 }
 

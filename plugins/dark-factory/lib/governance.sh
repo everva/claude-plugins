@@ -161,7 +161,7 @@ compute_risk_score() {
           current_label=$(echo "$line" | sed 's/.*label:[[:space:]]*//' | sed 's/^"//' | sed 's/"$//')
           # Apply the pattern check against labels + layer
           if [ -n "$current_pattern" ] && [ -n "$current_score" ]; then
-            if echo "$issue_labels $layer" | grep -qiE "$current_pattern"; then
+            if echo "$issue_labels $layer" | grep -qiE "$current_pattern" 2>/dev/null; then
               risk_score=$((risk_score + current_score))
               risk_factors="${risk_factors}${current_label:-custom},"
             fi

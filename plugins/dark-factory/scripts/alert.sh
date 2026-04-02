@@ -26,15 +26,21 @@ echo "[$TIMESTAMP] [$LEVEL] $TITLE: $MESSAGE" >> "$ALERT_LOG"
 
 # --- macOS Notification ---
 if command -v osascript &>/dev/null; then
+  # Escape strings for AppleScript (backslashes then double quotes)
+  _as_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+  safe_msg=$(_as_escape "$MESSAGE")
+  safe_title=$(_as_escape "$TITLE")
+  safe_project=$(_as_escape "$DF_PROJECT_NAME")
+
   case "$LEVEL" in
     critical)
-      osascript -e "display notification \"$MESSAGE\" with title \"$DF_PROJECT_NAME Dark Factory CRITICAL\" subtitle \"$TITLE\" sound name \"Sosumi\""
+      osascript -e "display notification \"$safe_msg\" with title \"$safe_project Dark Factory CRITICAL\" subtitle \"$safe_title\" sound name \"Sosumi\""
       ;;
     warning)
-      osascript -e "display notification \"$MESSAGE\" with title \"$DF_PROJECT_NAME Dark Factory Warning\" subtitle \"$TITLE\""
+      osascript -e "display notification \"$safe_msg\" with title \"$safe_project Dark Factory Warning\" subtitle \"$safe_title\""
       ;;
     info)
-      osascript -e "display notification \"$MESSAGE\" with title \"$DF_PROJECT_NAME Dark Factory\" subtitle \"$TITLE\""
+      osascript -e "display notification \"$safe_msg\" with title \"$safe_project Dark Factory\" subtitle \"$safe_title\""
       ;;
   esac
 fi

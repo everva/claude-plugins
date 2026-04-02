@@ -23,10 +23,11 @@ rl_get() {
 }
 
 # Update rate limiter state atomically
+# Usage: rl_set '<jq filter>' [--arg name val ...]
 rl_set() {
-  local tmp="${RL_STATE_FILE}.tmp"
-  local updates="$1"
-  jq "$updates" "$RL_STATE_FILE" > "$tmp" 2>/dev/null && [ -s "$tmp" ] && mv "$tmp" "$RL_STATE_FILE" || rm -f "$tmp"
+  local filter="$1"; shift
+  local tmp="${RL_STATE_FILE}.tmp.$$"
+  jq "$@" "$filter" "$RL_STATE_FILE" > "$tmp" 2>/dev/null && [ -s "$tmp" ] && mv "$tmp" "$RL_STATE_FILE" || rm -f "$tmp"
 }
 
 # Reset counters if the hour has rolled over
@@ -38,7 +39,7 @@ rl_maybe_reset_hour() {
   local elapsed=$((now - hour_start))
 
   if [ "$elapsed" -ge 3600 ]; then
-    rl_set ".calls_this_hour = 0 | .tokens_this_hour = 0 | .hour_start = $now"
+    rl_set '.calls_this_hour = 0 | .tokens_this_hour = 0 | .hour_start = $t' --argjson t "$now"
   fi
 }
 
@@ -48,7 +49,7 @@ rl_record_call() {
   local tokens="${1:-0}"
   rl_maybe_reset_hour
   # Atomic increment — single jq read-modify-write
-  local tmp="${RL_STATE_FILE}.tmp"
+  local tmp="${RL_STATE_FILE}.tmp.$$"
   jq --argjson t "$tokens" '.calls_this_hour += 1 | .tokens_this_hour += $t' \
     "$RL_STATE_FILE" > "$tmp" 2>/dev/null && [ -s "$tmp" ] && mv "$tmp" "$RL_STATE_FILE" || rm -f "$tmp"
 }
