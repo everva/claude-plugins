@@ -23,6 +23,10 @@ FACTORY_DIR="$DF_FACTORY_DIR"
 BACKLOG_FILE="$DF_BACKLOG_FILE"
 RALPH_LOG="$FACTORY_DIR/ralph.log"
 
+# Source resilience libs
+source "$PLUGIN_ROOT/lib/circuit_breaker.sh"
+source "$PLUGIN_ROOT/lib/rate_limiter.sh"
+
 # --- Configuration ---
 MAX_ITERATIONS="${1:-5}"
 MAX_DURATION_HOURS="${2:-6}"
@@ -38,6 +42,12 @@ ITERATION=0
 CONSECUTIVE_FAILURES=0
 TASKS_COMPLETED=0
 TASKS_FAILED=0
+EMPTY_BACKLOG_COUNT=0
+EMPTY_BACKLOG_CONFIRMATIONS="${DF_EXIT_EMPTY_BACKLOG_CONFIRMATIONS:-2}"
+
+# --- Initialize resilience subsystems ---
+cb_init
+rl_init
 
 # --- Retry Tracking ---
 # Initialize attempts file if missing
@@ -118,6 +128,9 @@ log "Max iterations: $MAX_ITERATIONS"
 log "Max duration: ${MAX_DURATION_HOURS}h"
 log "Governance ceiling: $GOVERNANCE_CEILING"
 log "Max attempts per spec: $MAX_ATTEMPTS_PER_SPEC"
+log "Rate limit: $(rl_status)"
+log "Circuit breaker: $(cb_state) (trip after ${DF_CB_NO_PROGRESS_THRESHOLD} no-progress / ${DF_CB_SAME_ERROR_THRESHOLD} same-error, ${DF_CB_COOLDOWN_MINUTES}m cooldown)"
+log "Dual-exit: backlog must report empty ${EMPTY_BACKLOG_CONFIRMATIONS} times before stopping"
 log "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 log ""
 
@@ -158,8 +171,31 @@ while true; do
     break
   fi
 
+  # --- Guard: Circuit breaker ---
+  if ! WAIT_MINUTES=$(cb_check); then
+    log "CIRCUIT OPEN: waiting ${WAIT_MINUTES}m for cooldown before probing..."
+    "$SCRIPT_DIR/alert.sh" warning "Circuit Breaker Open" "Cooling down for ${WAIT_MINUTES}m" 2>/dev/null || true
+    sleep $((WAIT_MINUTES * 60))
+    # Re-check after sleep
+    if ! cb_check >/dev/null; then
+      log "STOP: Circuit breaker still open after cooldown"
+      break
+    fi
+    log "CIRCUIT HALF-OPEN: probing with one iteration..."
+  fi
+
+  # --- Guard: Rate limiter ---
+  if WAIT_SECONDS=$(rl_check); then
+    : # within limits, proceed
+  else
+    log "RATE LIMITED: $(rl_status) — waiting ${WAIT_SECONDS}s for hour reset..."
+    "$SCRIPT_DIR/alert.sh" info "Rate Limited" "Waiting ${WAIT_SECONDS}s — $(rl_status)" 2>/dev/null || true
+    sleep "$WAIT_SECONDS"
+    log "Rate limit reset, resuming..."
+  fi
+
   ITERATION=$((ITERATION + 1))
-  log "--- Iteration $ITERATION / $MAX_ITERATIONS ---"
+  log "--- Iteration $ITERATION / $MAX_ITERATIONS --- [$(rl_status)]"
 
   # --- Step 1: Pick next task ---
   log "Selecting next task from backlog..."
@@ -181,9 +217,18 @@ while true; do
   fi
 
   if [ "$RAW_TASK" = "EMPTY" ] || [ -z "$RAW_TASK" ]; then
-    log "STOP: No pending tasks in backlog"
-    break
+    EMPTY_BACKLOG_COUNT=$((EMPTY_BACKLOG_COUNT + 1))
+    if [ "$EMPTY_BACKLOG_COUNT" -ge "$EMPTY_BACKLOG_CONFIRMATIONS" ]; then
+      log "STOP: Backlog confirmed empty $EMPTY_BACKLOG_COUNT/$EMPTY_BACKLOG_CONFIRMATIONS times — all done"
+      break
+    else
+      log "DUAL-EXIT: Backlog reported empty ($EMPTY_BACKLOG_COUNT/$EMPTY_BACKLOG_CONFIRMATIONS) — re-checking after 10s..."
+      sleep 10
+      continue
+    fi
   fi
+  # Backlog has tasks — reset empty counter
+  EMPTY_BACKLOG_COUNT=0
 
   # Parse task based on format
   if [ "$DF_BACKLOG_FORMAT" = "issue+spec" ]; then
@@ -225,6 +270,10 @@ while true; do
 
   SESSION_ID=$(ls -t "$FACTORY_DIR/sessions/" 2>/dev/null | head -1)
 
+  # --- Track API usage ---
+  rl_record_call
+  IS_HALF_OPEN=$(cb_state)
+
   # --- Step 3: Apply result ---
   case "$DECISION" in
     "auto-ship"|"auto-pr")
@@ -232,22 +281,42 @@ while true; do
       update_backlog_status "$TASK_LABEL" "completed" "$SESSION_ID"
       TASKS_COMPLETED=$((TASKS_COMPLETED + 1))
       CONSECUTIVE_FAILURES=0
+      cb_record_success
+      if [ "$IS_HALF_OPEN" = "HALF_OPEN" ]; then
+        log "CIRCUIT CLOSED: half-open probe succeeded"
+      fi
       ;;
     "no-op")
       log "NO-OP: $TASK_LABEL → already implemented (session: $SESSION_ID)"
       update_backlog_status "$TASK_LABEL" "no-op" "$SESSION_ID"
       CONSECUTIVE_FAILURES=0
+      cb_record_success
       ;;
     "review-pr"|"gated")
       log "DEFERRED: $TASK_LABEL → $DECISION (needs human review)"
       update_backlog_status "$TASK_LABEL" "deferred:$DECISION" "$SESSION_ID"
       CONSECUTIVE_FAILURES=0
+      cb_record_success
       ;;
     "blocked")
       log "FAILED: $TASK_LABEL → blocked (session: $SESSION_ID)"
       inc_attempts "$TASK_LABEL"
       TASKS_FAILED=$((TASKS_FAILED + 1))
       CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+      # Extract error signature from session for circuit breaker (not task label — different
+      # tasks failing with the same root cause should trip the breaker)
+      ERROR_SIG="unknown"
+      if [ -n "$SESSION_ID" ] && [ -f "$FACTORY_DIR/sessions/$SESSION_ID/governance.json" ]; then
+        ERROR_SIG=$(jq -r '.failure_reason // .tier // "unknown"' "$FACTORY_DIR/sessions/$SESSION_ID/governance.json" 2>/dev/null || echo "unknown")
+      fi
+      if ! cb_record_error "$ERROR_SIG"; then
+        log "CIRCUIT TRIPPED: repeated error '$ERROR_SIG' — entering cooldown"
+        "$SCRIPT_DIR/alert.sh" warning "Circuit Breaker Tripped" "Repeated error: $ERROR_SIG" 2>/dev/null || true
+      fi
+      if [ "$IS_HALF_OPEN" = "HALF_OPEN" ]; then
+        log "CIRCUIT RE-OPENED: half-open probe failed"
+        cb_finalize_probe "false"
+      fi
       # Check if spec is now exhausted
       TASK_ATTEMPTS_NOW=$(get_attempts "$TASK_LABEL")
       if [ "$TASK_ATTEMPTS_NOW" -ge "$MAX_ATTEMPTS_PER_SPEC" ]; then
@@ -263,6 +332,7 @@ while true; do
     *)
       log "UNKNOWN: $TASK_LABEL → $DECISION"
       CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+      cb_record_no_progress || log "CIRCUIT TRIPPED: too many iterations with no progress"
       ;;
   esac
 
@@ -282,6 +352,8 @@ log "Iterations:     $ITERATION"
 log "Completed:      $TASKS_COMPLETED"
 log "Failed:         $TASKS_FAILED"
 log "Duration:       ${HOURS}h ${MINUTES}m"
+log "Rate usage:     $(rl_status)"
+log "Circuit state:  $(cb_state)"
 log "Finished at:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 log "========================================="
 

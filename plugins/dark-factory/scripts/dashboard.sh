@@ -86,6 +86,17 @@ if [ -f "$RALPH_LOG" ]; then
   RALPH_LAST_RUN=$(grep "Finished at:" "$RALPH_LOG" 2>/dev/null | tail -1 | sed 's/.*Finished at: *//' || echo "never")
 fi
 
+# Resilience state
+CB_CURRENT_STATE="N/A"
+RL_CURRENT_STATUS="N/A"
+if [ -f "$DF_FACTORY_DIR/.circuit-breaker.json" ]; then
+  CB_CURRENT_STATE=$(jq -r '.state // "N/A"' "$DF_FACTORY_DIR/.circuit-breaker.json" 2>/dev/null || echo "N/A")
+fi
+if [ -f "$DF_FACTORY_DIR/.rate-limiter.json" ]; then
+  RL_CALLS=$(jq -r '.calls_this_hour // 0' "$DF_FACTORY_DIR/.rate-limiter.json" 2>/dev/null || echo "0")
+  RL_CURRENT_STATUS="${RL_CALLS}/${DF_RATE_LIMIT_CALLS:-60}"
+fi
+
 if [ "$TOTAL_SESSIONS" -gt 0 ]; then
   PASS_RATE=$(( (PASSED_SESSIONS * 100) / TOTAL_SESSIONS ))
 else
@@ -107,7 +118,9 @@ if [ "$OUTPUT_FORMAT" = "json" ]; then
     --argjson sat "$AVG_SATISFACTION" \
     --argjson runs "$RALPH_RUNS" \
     --arg last "$RALPH_LAST_RUN" \
-    '{timestamp:$ts, project:$project, period_days:$days, sessions:{total:$total, passed:$passed, failed:$failed, deferred:$deferred, noop:$noop, pass_rate:$rate}, quality:{avg_holdout:$holdout, avg_satisfaction:$sat}, ralph:{runs:$runs, last_run:$last}}'
+    --arg cb "$CB_CURRENT_STATE" \
+    --arg rl "$RL_CURRENT_STATUS" \
+    '{timestamp:$ts, project:$project, period_days:$days, sessions:{total:$total, passed:$passed, failed:$failed, deferred:$deferred, noop:$noop, pass_rate:$rate}, quality:{avg_holdout:$holdout, avg_satisfaction:$sat}, ralph:{runs:$runs, last_run:$last}, resilience:{circuit_breaker:$cb, rate_usage:$rl}}'
 else
   cat <<EOF
 
@@ -132,6 +145,15 @@ else
   ────────────────────────────
   Total Runs:    $RALPH_RUNS
   Last Run:      $RALPH_LAST_RUN
+$(if [ -f "$DF_FACTORY_DIR/.rate-limiter.json" ]; then
+  source "$PLUGIN_ROOT/lib/rate_limiter.sh" 2>/dev/null
+  rl_init 2>/dev/null
+  echo "  Rate Usage:    $(rl_status 2>/dev/null || echo 'N/A')"
+fi)
+$(if [ -f "$DF_FACTORY_DIR/.circuit-breaker.json" ]; then
+  source "$PLUGIN_ROOT/lib/circuit_breaker.sh" 2>/dev/null
+  echo "  Circuit State:  $(cb_state 2>/dev/null || echo 'N/A')"
+fi)
 
   Backlog
   ────────────────────────────

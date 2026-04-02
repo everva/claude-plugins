@@ -55,6 +55,7 @@ yaml_val() {
 
 # Load project config into environment variables
 # Sets: DF_PROJECT_NAME, DF_GITHUB_REPO, DF_SHIP_MODEL, DF_HOLDOUT_DIR, DF_BACKLOG_FILE, DF_BACKLOG_FORMAT
+# Also: DF_RATE_LIMIT_*, DF_CB_*, DF_EXIT_*
 load_project_config() {
   local project_dir
   project_dir="$(resolve_project_dir)"
@@ -77,6 +78,18 @@ load_project_config() {
     export DF_HOLDOUT_THRESHOLD="$(yaml_val "$config_file" "holdout_threshold" "90")"
     export DF_MAX_ATTEMPTS_PER_SPEC="$(yaml_val "$config_file" "max_attempts_per_spec" "3")"
     export DF_GUARDRAILS_FILE="$project_dir/$(yaml_val "$config_file" "guardrails_file" ".dark-factory/failure-patterns.md")"
+
+    # Rate limiting
+    export DF_RATE_LIMIT_CALLS="$(yaml_val "$config_file" "rate_limit_calls_per_hour" "60")"
+    export DF_RATE_LIMIT_TOKENS="$(yaml_val "$config_file" "rate_limit_tokens_per_hour" "0")"
+
+    # Circuit breaker
+    export DF_CB_NO_PROGRESS_THRESHOLD="$(yaml_val "$config_file" "cb_no_progress_threshold" "5")"
+    export DF_CB_SAME_ERROR_THRESHOLD="$(yaml_val "$config_file" "cb_same_error_threshold" "3")"
+    export DF_CB_COOLDOWN_MINUTES="$(yaml_val "$config_file" "cb_cooldown_minutes" "30")"
+
+    # Dual-condition exit
+    export DF_EXIT_EMPTY_BACKLOG_CONFIRMATIONS="$(yaml_val "$config_file" "exit_empty_backlog_confirmations" "2")"
   else
     # Defaults when no config exists (simpler mode: spec-only backlog, no GitHub integration)
     export DF_PROJECT_NAME="$(basename "$project_dir")"
@@ -91,5 +104,17 @@ load_project_config() {
     export DF_HOLDOUT_THRESHOLD="90"
     export DF_MAX_ATTEMPTS_PER_SPEC="3"
     export DF_GUARDRAILS_FILE="$project_dir/.dark-factory/failure-patterns.md"
+
+    # Rate limiting (defaults)
+    export DF_RATE_LIMIT_CALLS="60"
+    export DF_RATE_LIMIT_TOKENS="0"
+
+    # Circuit breaker (defaults)
+    export DF_CB_NO_PROGRESS_THRESHOLD="5"
+    export DF_CB_SAME_ERROR_THRESHOLD="3"
+    export DF_CB_COOLDOWN_MINUTES="30"
+
+    # Dual-condition exit (defaults)
+    export DF_EXIT_EMPTY_BACKLOG_CONFIRMATIONS="2"
   fi
 }

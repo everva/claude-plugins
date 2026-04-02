@@ -17,15 +17,21 @@
   ],
   "userConfig": {
     "project_name": {
+      "title": "Project Name",
       "description": "Project name for alerts and logs (e.g., XiriGo, Optiway)",
+      "type": "string",
       "sensitive": false
     },
     "github_repo": {
+      "title": "GitHub Repo",
       "description": "GitHub repo in owner/repo format for issue sync and PR management",
+      "type": "string",
       "sensitive": false
     },
     "ship_model": {
+      "title": "Ship Model",
       "description": "Ship strategy: direct-commit | pr-creation | pr-label (default: pr-creation)",
+      "type": "string",
       "sensitive": false
     }
   }
