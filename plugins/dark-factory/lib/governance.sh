@@ -55,14 +55,14 @@ parse_json_field() {
 
   # Try 1: Direct JSON field
   local val=""
-  val=$(jq -r ".$field // empty" "$file" 2>/dev/null)
+  val=$(jq -r "if has(\"$field\") then .$field else empty end" "$file" 2>/dev/null)
   if [ -n "$val" ] && [ "$val" != "null" ]; then echo "$val"; return; fi
 
   # Try 1b: Extract JSON from markdown code blocks (```json ... ```)
   local md_json=""
   md_json=$(sed -n '/^```json *$/,/^```$/p' "$file" 2>/dev/null | sed '1d;$d')
   if [ -n "$md_json" ]; then
-    val=$(echo "$md_json" | jq -r ".$field // empty" 2>/dev/null)
+    val=$(echo "$md_json" | jq -r "if has(\"$field\") then .$field else empty end" 2>/dev/null)
     if [ -n "$val" ] && [ "$val" != "null" ]; then echo "$val"; return; fi
   fi
 
@@ -70,7 +70,7 @@ parse_json_field() {
   local raw_json=""
   raw_json=$(grep -oE "\{[^}]*\"$field\"[[:space:]]*:[^}]*\}" "$file" 2>/dev/null | head -1)
   if [ -n "$raw_json" ]; then
-    val=$(echo "$raw_json" | jq -r ".$field // empty" 2>/dev/null)
+    val=$(echo "$raw_json" | jq -r "if has(\"$field\") then .$field else empty end" 2>/dev/null)
     if [ -n "$val" ] && [ "$val" != "null" ]; then echo "$val"; return; fi
   fi
 
@@ -82,14 +82,14 @@ parse_json_field() {
     marker_json=$(echo "$val" | grep -oE 'DARK_FACTORY_RESULT:\{[^}]+\}' | head -1 | sed 's/^DARK_FACTORY_RESULT://')
     if [ -n "$marker_json" ]; then
       local fval=""
-      fval=$(echo "$marker_json" | jq -r ".$field // empty" 2>/dev/null)
+      fval=$(echo "$marker_json" | jq -r "if has(\"$field\") then .$field else empty end" 2>/dev/null)
       if [ -n "$fval" ] && [ "$fval" != "null" ]; then echo "$fval"; return; fi
     fi
     # Look for JSON block containing the field
     local block=""
     block=$(echo "$val" | grep -oE "\{[^}]*\"$field\"[^}]*\}" | head -1)
     if [ -n "$block" ]; then
-      fval=$(echo "$block" | jq -r ".$field // empty" 2>/dev/null)
+      fval=$(echo "$block" | jq -r "if has(\"$field\") then .$field else empty end" 2>/dev/null)
       if [ -n "$fval" ] && [ "$fval" != "null" ]; then echo "$fval"; return; fi
     fi
   fi
