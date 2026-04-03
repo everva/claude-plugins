@@ -72,7 +72,7 @@ get_attempts() {
 # Increment attempt count for a spec
 inc_attempts() {
   local spec="$1"
-  local tmp="${ATTEMPTS_FILE}.tmp"
+  local tmp="${ATTEMPTS_FILE}.tmp.$$"
   jq --arg s "$spec" '.[$s] = ((.[$s] // 0) + 1)' "$ATTEMPTS_FILE" > "$tmp" 2>/dev/null \
     && [ -s "$tmp" ] && mv "$tmp" "$ATTEMPTS_FILE" || rm -f "$tmp"
 }

@@ -54,7 +54,7 @@ ship_blocked() {
     gh_optional pr close "$pr_url" --comment "[Dark Factory] Blocked by governance (holdout=$holdout_pass, satisfaction=$sat_int, impl=$impl_success)"
     ship_log "Closed PR: $pr_url"
   fi
-  if [ -n "$issue_number" ] && [ -n "$github_repo" ]; then
+  if [ -n "$issue_number" ] && [ "$issue_number" != "0" ] && [ -n "$github_repo" ]; then
     gh_optional issue edit "$issue_number" -R "$github_repo" --remove-label "status:ready,status:in-progress" --add-label "status:blocked"
     ship_log "Issue #$issue_number marked status:blocked"
   fi
@@ -65,7 +65,7 @@ ship_noop() {
   local issue_number="$1" github_repo="$2"
 
   ship_log "NO-OP — skipping ship (0 files changed)"
-  if [ -n "$issue_number" ] && [ -n "$github_repo" ]; then
+  if [ -n "$issue_number" ] && [ "$issue_number" != "0" ] && [ -n "$github_repo" ]; then
     gh_optional issue edit "$issue_number" -R "$github_repo" --remove-label "status:ready,status:in-progress" --add-label "status:merged"
     ship_log "Issue #$issue_number marked status:merged (no-op)"
   fi
@@ -88,7 +88,7 @@ ship_review() {
   else
     ship_log "No PR found for deferred task"
   fi
-  if [ -n "$issue_number" ] && [ -n "$github_repo" ]; then
+  if [ -n "$issue_number" ] && [ "$issue_number" != "0" ] && [ -n "$github_repo" ]; then
     gh_optional issue edit "$issue_number" -R "$github_repo" --remove-label "status:ready,status:in-progress" --add-label "status:review"
   fi
 }
@@ -127,7 +127,7 @@ ship_auto() {
     fi
   fi
 
-  if [ -n "$issue_number" ] && [ -n "$github_repo" ]; then
+  if [ -n "$issue_number" ] && [ "$issue_number" != "0" ] && [ -n "$github_repo" ]; then
     if [ "$decision" = "auto-ship" ] || [ "$merged" = "true" ]; then
       gh_optional issue edit "$issue_number" -R "$github_repo" --remove-label "status:ready,status:in-progress" --add-label "status:merged"
     else

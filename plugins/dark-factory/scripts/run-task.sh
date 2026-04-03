@@ -390,15 +390,15 @@ if [ -z "$IMPL_PR_URL" ]; then
 fi
 
 # Parse holdout + satisfaction results
-HOLDOUT_PASS=$(parse_json_field "$SESSION_DIR/holdout-result.json" "overall_pass" "true")
+HOLDOUT_PASS=$(parse_json_field "$SESSION_DIR/holdout-result.json" "overall_pass" "false")
 HOLDOUT_SCORE=$(parse_json_field "$SESSION_DIR/holdout-result.json" "overall_score" "0")
 
 SATISFACTION_SCORE="0"
 for sat_file in "$SESSION_DIR/satisfaction-parsed.json" "$SESSION_DIR/satisfaction-result.json"; do
   [ -f "$sat_file" ] || continue
   for field in final_score composite_score score; do
-    val=$(parse_json_field "$sat_file" "$field" "0")
-    if [ "$val" != "0" ] && [ "$val" != "null" ]; then
+    val=$(parse_json_field "$sat_file" "$field" "__MISSING__")
+    if [ "$val" != "__MISSING__" ] && [ "$val" != "null" ]; then
       SATISFACTION_SCORE="$val"
       break 2
     fi
@@ -406,8 +406,21 @@ for sat_file in "$SESSION_DIR/satisfaction-parsed.json" "$SESSION_DIR/satisfacti
 done
 
 # Satisfaction score may be 0-10 scale (from satisfaction agent) — normalize to 0-100
-if echo "$SATISFACTION_SCORE" | grep -qE '^[0-9]+\.?[0-9]*$' && [ "$(echo "$SATISFACTION_SCORE <= 10" | bc -l 2>/dev/null)" = "1" ] && [ "$SATISFACTION_SCORE" != "0" ]; then
-  SATISFACTION_SCORE=$(echo "$SATISFACTION_SCORE * 10" | bc -l 2>/dev/null | sed 's/\..*//')
+if echo "$SATISFACTION_SCORE" | grep -qE '^[0-9]+\.?[0-9]*$' && [ "$SATISFACTION_SCORE" != "0" ]; then
+  # Use bc if available, fallback to awk
+  _le10=""
+  if command -v bc &>/dev/null; then
+    _le10=$(echo "$SATISFACTION_SCORE <= 10" | bc -l 2>/dev/null)
+  else
+    _le10=$(awk "BEGIN{print ($SATISFACTION_SCORE <= 10) ? 1 : 0}" 2>/dev/null)
+  fi
+  if [ "$_le10" = "1" ]; then
+    if command -v bc &>/dev/null; then
+      SATISFACTION_SCORE=$(echo "$SATISFACTION_SCORE * 10" | bc -l 2>/dev/null | sed 's/\..*//')
+    else
+      SATISFACTION_SCORE=$(awk "BEGIN{printf \"%d\", $SATISFACTION_SCORE * 10}" 2>/dev/null)
+    fi
+  fi
 fi
 SAT_INT=$(safe_int "$SATISFACTION_SCORE")
 HOLDOUT_INT=$(safe_int "$HOLDOUT_SCORE")

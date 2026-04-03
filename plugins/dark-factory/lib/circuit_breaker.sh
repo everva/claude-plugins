@@ -21,7 +21,7 @@ CBJSON
 # Read a field from circuit breaker state
 cb_get() {
   local field="$1"
-  jq -r ".$field // empty" "$CB_STATE_FILE" 2>/dev/null || echo ""
+  jq -r "if has(\"$field\") then .$field else empty end" "$CB_STATE_FILE" 2>/dev/null || echo ""
 }
 
 # Update circuit breaker state atomically
