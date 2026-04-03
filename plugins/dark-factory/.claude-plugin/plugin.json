@@ -1,6 +1,6 @@
 {
   "name": "dark-factory",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Dark Factory: Autonomous AI development pipeline with governance tiers, holdout validation, satisfaction judging, and Ralph Wiggum loop.",
   "author": {
     "name": "Everva"

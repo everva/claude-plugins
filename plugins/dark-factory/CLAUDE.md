@@ -46,3 +46,4 @@ cb_same_error_threshold: 3        # Trip circuit after N identical errors
 cb_cooldown_minutes: 30           # Wait time before HALF_OPEN probe
 exit_empty_backlog_confirmations: 2  # Confirm empty backlog N times before stopping
 ```
+# test

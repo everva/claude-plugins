@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Everva Claude Code Plugin Marketplace — Dark Factory, Code Review, and more.",
-    "version": "1.3.0"
+    "version": "1.3.1"
   },
   "plugins": [
     {
@@ -14,15 +14,27 @@
       "description": "Multi-session code review with auto-fix loop. Isolated reviewer sessions for unbiased review.",
       "version": "1.1.1",
       "category": "quality",
-      "tags": ["code-review", "quality", "security", "auto-fix", "review-loop"]
+      "tags": [
+        "code-review",
+        "quality",
+        "security",
+        "auto-fix",
+        "review-loop"
+      ]
     },
     {
       "name": "dark-factory",
       "source": "./plugins/dark-factory",
       "description": "Dark Factory: Autonomous AI development pipeline with governance tiers, holdout validation, satisfaction judging, and Ralph Wiggum loop.",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "category": "automation",
-      "tags": ["dark-factory", "autonomous", "pipeline", "governance", "holdout"]
+      "tags": [
+        "dark-factory",
+        "autonomous",
+        "pipeline",
+        "governance",
+        "holdout"
+      ]
     },
     {
       "name": "mobile-agents",
@@ -30,7 +42,15 @@
       "description": "iOS and Android UI specialist agents — HIG compliance, Material Design 3, accessibility gates.",
       "version": "1.0.0",
       "category": "agents",
-      "tags": ["mobile", "ios", "android", "swiftui", "compose", "hig", "material-design"]
+      "tags": [
+        "mobile",
+        "ios",
+        "android",
+        "swiftui",
+        "compose",
+        "hig",
+        "material-design"
+      ]
     },
     {
       "name": "tdd-pipeline",
@@ -38,7 +58,14 @@
       "description": "TDD pipeline agents: tester (test-first), reviewer (quality gates), and UI polish.",
       "version": "1.0.0",
       "category": "agents",
-      "tags": ["tdd", "testing", "review", "quality", "pipeline", "coverage"]
+      "tags": [
+        "tdd",
+        "testing",
+        "review",
+        "quality",
+        "pipeline",
+        "coverage"
+      ]
     }
   ]
 }
