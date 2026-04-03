@@ -105,6 +105,11 @@ load_project_config() {
     export DF_IMPL_PROMPT_FILE="$(yaml_val "$config_file" "impl_prompt_file" "")"
     export DF_IMPL_AGENT="$(yaml_val "$config_file" "impl_agent" "")"
 
+    # Layer → holdout directory mapping (comma-separated key=value pairs)
+    # Example: "backend=api,shared=mobile,ios=mobile,android=mobile"
+    # Empty = identity mapping (layer name = holdout dir name)
+    export DF_LAYER_MAPPING="$(yaml_val "$config_file" "layer_mapping" "")"
+
     # Holdout guard agent whitelist
     export DF_HOLDOUT_ALLOWED_AGENTS="$(yaml_val "$config_file" "holdout_allowed_agents" "holdout-validator,satisfaction-judge")"
 
@@ -176,6 +181,9 @@ load_project_config() {
     # Custom implementation prompt/agent (defaults: empty = use built-in)
     export DF_IMPL_PROMPT_FILE=""
     export DF_IMPL_AGENT=""
+
+    # Layer mapping (defaults: empty = identity)
+    export DF_LAYER_MAPPING=""
 
     # Holdout guard agent whitelist (defaults)
     export DF_HOLDOUT_ALLOWED_AGENTS="holdout-validator,satisfaction-judge"

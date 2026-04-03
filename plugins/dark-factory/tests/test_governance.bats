@@ -269,22 +269,51 @@ teardown() {
 # map_holdout_layer
 # ============================================================
 
-@test "map_holdout_layer: backend maps to api" {
+@test "map_holdout_layer: no mapping config — identity passthrough" {
+  unset DF_LAYER_MAPPING 2>/dev/null || true
   local result
   result=$(map_holdout_layer "backend")
-  [ "$result" = "api" ]
+  [ "$result" = "backend" ]
 }
 
-@test "map_holdout_layer: frontend passes through" {
+@test "map_holdout_layer: no mapping config — any layer passes through" {
+  unset DF_LAYER_MAPPING 2>/dev/null || true
   local result
   result=$(map_holdout_layer "frontend")
   [ "$result" = "frontend" ]
 }
 
-@test "map_holdout_layer: unknown passes through" {
+@test "map_holdout_layer: config mapping — backend=api" {
+  export DF_LAYER_MAPPING="backend=api"
+  local result
+  result=$(map_holdout_layer "backend")
+  [ "$result" = "api" ]
+  unset DF_LAYER_MAPPING
+}
+
+@test "map_holdout_layer: config mapping — multiple mappings" {
+  export DF_LAYER_MAPPING="backend=api,shared=mobile,ios=mobile,android=mobile"
+  [ "$(map_holdout_layer "backend")" = "api" ]
+  [ "$(map_holdout_layer "shared")" = "mobile" ]
+  [ "$(map_holdout_layer "ios")" = "mobile" ]
+  [ "$(map_holdout_layer "android")" = "mobile" ]
+  unset DF_LAYER_MAPPING
+}
+
+@test "map_holdout_layer: config mapping — unmapped layer passes through" {
+  export DF_LAYER_MAPPING="backend=api,shared=mobile"
+  local result
+  result=$(map_holdout_layer "frontend")
+  [ "$result" = "frontend" ]
+  unset DF_LAYER_MAPPING
+}
+
+@test "map_holdout_layer: empty mapping string — identity" {
+  export DF_LAYER_MAPPING=""
   local result
   result=$(map_holdout_layer "infra")
   [ "$result" = "infra" ]
+  unset DF_LAYER_MAPPING
 }
 
 # ============================================================

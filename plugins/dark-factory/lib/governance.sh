@@ -259,13 +259,23 @@ determine_tier() {
 # --- Layer Helpers ---
 
 # Map layer name to holdout directory name
-# Usage: map_holdout_layer <layer>
+# Uses DF_LAYER_MAPPING from config (comma-separated key=value pairs)
+# Example: DF_LAYER_MAPPING="backend=api,shared=mobile,ios=mobile"
+# If no mapping found, returns the layer name as-is (identity mapping)
 map_holdout_layer() {
   local layer="$1"
-  case "$layer" in
-    backend) echo "api" ;;
-    *)       echo "$layer" ;;
-  esac
+  local mapping="${DF_LAYER_MAPPING:-}"
+
+  if [ -n "$mapping" ]; then
+    local mapped
+    mapped=$(echo ",$mapping," | grep -oE ",${layer}=[^,]+" | head -1 | cut -d= -f2 || true)
+    if [ -n "$mapped" ]; then
+      echo "$mapped"
+      return
+    fi
+  fi
+
+  echo "$layer"
 }
 
 # Extract layer from issue labels or spec filename

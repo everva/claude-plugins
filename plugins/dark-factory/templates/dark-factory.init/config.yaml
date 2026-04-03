@@ -81,6 +81,12 @@ risk_factors:
 # impl_prompt_file: ""       # Path to custom prompt file (relative to project root)
 # impl_agent: ""             # Named agent for implementation
 
+# --- Layer → Holdout Directory Mapping ---
+# Maps layer names to holdout directory names (comma-separated key=value)
+# Empty = identity mapping (layer name = directory name)
+# Example: layer_mapping: "backend=api,shared=mobile,ios=mobile,android=mobile"
+# layer_mapping: ""
+
 # --- Holdout Guard ---
 # holdout_allowed_agents: "holdout-validator,satisfaction-judge"
 
