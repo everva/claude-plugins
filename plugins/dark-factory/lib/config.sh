@@ -133,6 +133,7 @@ load_project_config() {
     # Rate limiting
     export DF_RATE_LIMIT_CALLS="$(yaml_val "$config_file" "rate_limit_calls_per_hour" "60")"
     export DF_RATE_LIMIT_TOKENS="$(yaml_val "$config_file" "rate_limit_tokens_per_hour" "0")"
+    export DF_RATE_LIMIT_PAUSE_PCT="$(yaml_val "$config_file" "rate_limit_pause_pct" "90")"
 
     # Circuit breaker
     export DF_CB_NO_PROGRESS_THRESHOLD="$(yaml_val "$config_file" "cb_no_progress_threshold" "5")"
@@ -208,6 +209,7 @@ load_project_config() {
     # Rate limiting (defaults)
     export DF_RATE_LIMIT_CALLS="60"
     export DF_RATE_LIMIT_TOKENS="0"
+    export DF_RATE_LIMIT_PAUSE_PCT="90"
 
     # Circuit breaker (defaults)
     export DF_CB_NO_PROGRESS_THRESHOLD="5"

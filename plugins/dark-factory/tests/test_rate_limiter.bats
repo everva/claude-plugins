@@ -1,12 +1,10 @@
 #!/usr/bin/env bats
-# Tests for Dark Factory rate limiter (lib/rate_limiter.sh)
+# Tests for Dark Factory reactive rate limiter (lib/rate_limiter.sh)
 
 PLUGIN_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
 setup() {
   export DF_FACTORY_DIR="$(mktemp -d)"
-  export DF_RATE_LIMIT_CALLS=5
-  export DF_RATE_LIMIT_TOKENS=1000
   source "$PLUGIN_ROOT/lib/rate_limiter.sh"
 }
 
@@ -16,111 +14,148 @@ teardown() {
 
 # --- rl_init ---
 
-@test "rl_init creates state file" {
+@test "rl_init creates state file with rate_limited=false" {
   rl_init
   [ -f "$DF_FACTORY_DIR/.rate-limiter.json" ]
-  local calls
-  calls=$(jq -r '.calls_this_hour' "$DF_FACTORY_DIR/.rate-limiter.json")
-  [ "$calls" -eq 0 ]
-  local tokens
-  tokens=$(jq -r '.tokens_this_hour' "$DF_FACTORY_DIR/.rate-limiter.json")
-  [ "$tokens" -eq 0 ]
+  local limited
+  limited=$(jq -r '.rate_limited' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$limited" = "false" ]
+  local total
+  total=$(jq -r '.total_hits' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$total" -eq 0 ]
 }
 
-# --- rl_record_call ---
+# --- rl_is_rate_limited ---
 
-@test "rl_record_call increments call count" {
+@test "rl_is_rate_limited returns 1 for normal output" {
   rl_init
-  rl_record_call
-  [ "$(rl_get calls_this_hour)" -eq 1 ]
-  rl_record_call
-  [ "$(rl_get calls_this_hour)" -eq 2 ]
+  local file="$DF_FACTORY_DIR/output.txt"
+  echo "Implementation complete. All tests pass." > "$file"
+  run rl_is_rate_limited "$file"
+  [ "$status" -eq 1 ]
 }
 
-@test "rl_record_call with tokens increments both" {
+@test "rl_is_rate_limited returns 0 and wait seconds for limit message" {
   rl_init
-  rl_record_call 250
-  [ "$(rl_get calls_this_hour)" -eq 1 ]
-  [ "$(rl_get tokens_this_hour)" -eq 250 ]
-  rl_record_call 100
-  [ "$(rl_get calls_this_hour)" -eq 2 ]
-  [ "$(rl_get tokens_this_hour)" -eq 350 ]
+  local file="$DF_FACTORY_DIR/output.txt"
+  echo "You've hit your limit · resets 11am" > "$file"
+  run rl_is_rate_limited "$file"
+  [ "$status" -eq 0 ]
+  # Output should be a positive number (wait seconds)
+  [[ "$output" =~ ^[0-9]+$ ]]
+  [ "$output" -gt 0 ]
+}
+
+@test "rl_is_rate_limited detects partial match" {
+  rl_init
+  local file="$DF_FACTORY_DIR/output.txt"
+  echo "Error: hit your limit for this period, resets 2pm" > "$file"
+  run rl_is_rate_limited "$file"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ ^[0-9]+$ ]]
+}
+
+@test "rl_is_rate_limited returns 1 for missing file" {
+  rl_init
+  run rl_is_rate_limited "$DF_FACTORY_DIR/nonexistent.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "rl_is_rate_limited updates state to rate_limited=true" {
+  rl_init
+  local file="$DF_FACTORY_DIR/output.txt"
+  echo "You've hit your limit · resets 3pm" > "$file"
+  rl_is_rate_limited "$file" >/dev/null
+  local limited
+  limited=$(jq -r '.rate_limited' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$limited" = "true" ]
+  local total
+  total=$(jq -r '.total_hits' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$total" -eq 1 ]
+}
+
+@test "rl_is_rate_limited increments total_hits" {
+  rl_init
+  local file="$DF_FACTORY_DIR/output.txt"
+  echo "You've hit your limit · resets 4pm" > "$file"
+  rl_is_rate_limited "$file" >/dev/null
+  rl_is_rate_limited "$file" >/dev/null
+  local total
+  total=$(jq -r '.total_hits' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$total" -eq 2 ]
+}
+
+@test "rl_is_rate_limited includes 2 minute buffer" {
+  rl_init
+  local file="$DF_FACTORY_DIR/output.txt"
+  # Use a reset time far in the future to get predictable result
+  echo "You've hit your limit · resets 11pm" > "$file"
+  local wait
+  wait=$(rl_is_rate_limited "$file")
+  # wait should include 120s buffer
+  [ "$wait" -ge 120 ]
+}
+
+# --- rl_record_success ---
+
+@test "rl_record_success clears rate limit state" {
+  rl_init
+  # Set rate limited state
+  rl_set '.rate_limited = true | .reset_time = "3pm" | .wait_until = 9999999999'
+  rl_record_success
+  local limited
+  limited=$(jq -r '.rate_limited' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$limited" = "false" ]
+  local wait_until
+  wait_until=$(jq -r '.wait_until' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$wait_until" -eq 0 ]
 }
 
 # --- rl_check ---
 
-@test "rl_check returns 0 when under limit" {
+@test "rl_check returns 0 when not rate limited" {
   rl_init
-  rl_record_call 50
   run rl_check
   [ "$status" -eq 0 ]
 }
 
-@test "rl_check returns 1 when call limit hit" {
+@test "rl_check returns 1 with remaining seconds when rate limited" {
   rl_init
-  for i in $(seq 1 5); do
-    rl_record_call
-  done
-  run rl_check
-  [ "$status" -eq 1 ]
-  # Output should be remaining seconds (positive integer)
-  [[ "$output" =~ ^[0-9]+$ ]]
-  [ "$output" -gt 0 ]
-}
-
-@test "rl_check returns 1 when token limit hit" {
-  rl_init
-  rl_record_call 600
-  rl_record_call 500
-  # Now at 1100 tokens, limit is 1000
+  local future=$(($(date +%s) + 600))
+  rl_set '.rate_limited = true | .wait_until = $w' --argjson w "$future"
   run rl_check
   [ "$status" -eq 1 ]
   [[ "$output" =~ ^[0-9]+$ ]]
   [ "$output" -gt 0 ]
+  [ "$output" -le 600 ]
 }
 
-@test "rl_check returns remaining seconds that are positive and never negative" {
+@test "rl_check clears state when cooldown elapsed" {
   rl_init
-  # Fill up calls to hit limit
-  for i in $(seq 1 5); do
-    rl_record_call
-  done
+  local past=$(($(date +%s) - 60))
+  rl_set '.rate_limited = true | .wait_until = $w' --argjson w "$past"
   run rl_check
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ ^[0-9]+$ ]]
-  [ "$output" -ge 1 ]
-}
-
-# --- rl_maybe_reset_hour ---
-
-@test "rl_maybe_reset_hour resets after 3600 seconds" {
-  rl_init
-  # Record some calls
-  rl_record_call 100
-  rl_record_call 200
-  [ "$(rl_get calls_this_hour)" -eq 2 ]
-  [ "$(rl_get tokens_this_hour)" -eq 300 ]
-
-  # Fake hour_start to be over an hour ago
-  local old_ts=$(( $(date +%s) - 3700 ))
-  rl_set ".hour_start = $old_ts"
-
-  # Trigger reset via rl_maybe_reset_hour
-  rl_maybe_reset_hour
-
-  [ "$(rl_get calls_this_hour)" -eq 0 ]
-  [ "$(rl_get tokens_this_hour)" -eq 0 ]
+  [ "$status" -eq 0 ]
+  local limited
+  limited=$(jq -r '.rate_limited' "$DF_FACTORY_DIR/.rate-limiter.json")
+  [ "$limited" = "false" ]
 }
 
 # --- rl_status ---
 
-@test "rl_status returns formatted string" {
+@test "rl_status shows OK when not limited" {
   rl_init
-  rl_record_call 150
-  rl_record_call 250
-
   local result
   result=$(rl_status)
-  # With token limit enabled, format is: "calls/max calls, tokens/max tokens this hour"
-  [[ "$result" == "2/5 calls, 400/1000 tokens this hour" ]]
+  [[ "$result" == *"OK"* ]]
+}
+
+@test "rl_status shows RATE LIMITED when limited" {
+  rl_init
+  rl_set '.rate_limited = true | .reset_time = "3pm" | .total_hits = 2'
+  local result
+  result=$(rl_status)
+  [[ "$result" == *"RATE LIMITED"* ]]
+  [[ "$result" == *"3pm"* ]]
+  [[ "$result" == *"2"* ]]
 }

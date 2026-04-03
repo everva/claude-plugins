@@ -196,8 +196,8 @@ while true; do
   if WAIT_SECONDS=$(rl_check); then
     : # within limits, proceed
   else
-    log "RATE LIMITED: $(rl_status) — waiting ${WAIT_SECONDS}s for hour reset..."
-    "$SCRIPT_DIR/alert.sh" info "Rate Limited" "Waiting ${WAIT_SECONDS}s — $(rl_status)" 2>/dev/null || true
+    log "RATE LIMITED: $(rl_status) — cooling down ${WAIT_SECONDS}s..."
+    "$SCRIPT_DIR/alert.sh" info "Rate Limited" "$(rl_status) — cooling down ${WAIT_SECONDS}s" 2>/dev/null || true
     sleep "$WAIT_SECONDS"
     log "Rate limit reset, resuming..."
   fi
@@ -281,8 +281,24 @@ while true; do
   fi
 
   # --- Track API usage ---
-  rl_record_call
   IS_HALF_OPEN=$(cb_state)
+
+  # --- Guard: Rate limit detected ---
+  if [ "$DECISION" = "rate_limited" ]; then
+    log "RATE LIMITED: Subscription limit hit"
+    # Read wait time from rate limiter state
+    if WAIT_SECS=$(rl_check); then
+      # State not set yet, check session output
+      WAIT_SECS=3600
+    fi
+    log "PAUSING: Waiting ${WAIT_SECS}s for rate limit reset..."
+    "$SCRIPT_DIR/alert.sh" warning "Rate Limited" "Subscription limit — sleeping ${WAIT_SECS}s" 2>/dev/null || true
+    sleep "$WAIT_SECS"
+    log "Rate limit cooldown complete, resuming..."
+    # Put task back to pending for retry (don't count as attempt)
+    update_backlog_status "$TASK_LABEL" "pending" "$SESSION_ID"
+    continue
+  fi
 
   # --- Step 3: Apply result ---
   case "$DECISION" in

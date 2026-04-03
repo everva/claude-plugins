@@ -232,6 +232,14 @@ if [ "$IMPL_EXIT" -eq 124 ]; then
   echo '<!-- DARK_FACTORY_RESULT:{"success":false,"layer":"'"$LAYER"'","files_changed":0,"tests_passed":0,"tests_total":0,"coverage":0,"pr_url":null,"error":"timeout after '"${IMPL_TIMEOUT}"'s"} -->' > "$SESSION_DIR/implementation-result.txt"
 fi
 
+# Check for subscription rate limit ("You've hit your limit · resets Xam/pm")
+if WAIT_SECS=$(rl_is_rate_limited "$SESSION_DIR/implementation-result.txt"); then
+  echo "[$SESSION_ID] RATE LIMITED: Subscription limit hit. Waiting ${WAIT_SECS}s for reset." >> "$SESSION_DIR/run.log"
+  echo '<!-- DARK_FACTORY_RESULT:{"success":false,"layer":"'"$LAYER"'","files_changed":0,"tests_passed":0,"tests_total":0,"coverage":0,"pr_url":null,"error":"rate_limited"} -->' > "$SESSION_DIR/implementation-result.txt"
+  echo "rate_limited"
+  exit 2
+fi
+
 echo "[$SESSION_ID] Implementation complete (exit=$IMPL_EXIT)" >> "$SESSION_DIR/run.log"
 
 # --- Step 3: Run holdout validation ---
