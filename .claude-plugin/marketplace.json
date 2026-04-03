@@ -10,7 +10,11 @@
   "plugins": [
     {
       "name": "code-review",
-      "source": "./plugins/code-review"
+      "source": "./plugins/code-review",
+      "description": "Multi-session code review with auto-fix loop. Isolated reviewer sessions for unbiased review.",
+      "version": "1.1.1",
+      "category": "quality",
+      "tags": ["code-review", "quality", "security", "auto-fix", "review-loop"]
     },
     {
       "name": "dark-factory",
