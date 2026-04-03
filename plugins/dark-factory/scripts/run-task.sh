@@ -88,8 +88,11 @@ fi
 # Extract layer
 LAYER=$(extract_layer "$ISSUE_LABELS" "$SPEC_FILE")
 
-# Extract pipeline type
+# Extract pipeline type (from issue labels first, then from backlog)
 PIPELINE=$(echo "$ISSUE_LABELS" | tr ',' '\n' | grep '^pipeline:' | head -1 | cut -d: -f2 || true)
+if [ -z "$PIPELINE" ] && [ -n "$SPEC_FILE" ] && [ -f "$DF_BACKLOG_FILE" ]; then
+  PIPELINE=$(grep "$SPEC_FILE" "$DF_BACKLOG_FILE" 2>/dev/null | grep -oE '\|\s*(full|standard|quick)\s*\|' | tr -d '| ' | head -1 || true)
+fi
 PIPELINE=${PIPELINE:-standard}
 
 echo "[$SESSION_ID] Spec: ${SPEC_FILE:-none}" >> "$SESSION_DIR/run.log"

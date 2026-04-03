@@ -27,7 +27,7 @@ if [ "$TOOL_NAME" = "Bash" ]; then
 
   # Allow non-reading commands (git, mkdir, build, etc.)
   # Only check commands that actually read file contents
-  if ! echo "$BASH_CMD" | grep -qE 'cat |head |tail |less |more |bat '; then
+  if ! echo "$BASH_CMD" | grep -qE 'cat |head |tail |less |more |bat |grep |sed |awk |source |python |ruby |perl '; then
     echo '{}'
     exit 0
   fi
